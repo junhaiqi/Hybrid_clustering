@@ -87,4 +87,8 @@ e.g. test.txt:
 Here, one line of the file represents a category, and the number appearing in each line corresponds to the corresponding DNA sequence in the fasta file. 
 
 ```
+More data is provided in the following Baidu cloud link：
+link：https://pan.baidu.com/s/10fDERa9uIKYN8lhwCOM_Ug 
+Extraction code：hycl
+Interested users can download and use.
 
