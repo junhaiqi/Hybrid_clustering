@@ -121,7 +121,7 @@ The specific parameters are as follows:
 
 When the dataset for testing is prepared, users can run the following command to test whether this module algorithm is deployed successfully:
 ```bash
-bash mainDemultiplexByClusteringRes.py
+bash runExample_mainDemultiplexByClusteringRes.sh
 ```
 
 
