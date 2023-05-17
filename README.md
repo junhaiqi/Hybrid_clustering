@@ -21,7 +21,7 @@ You can read more about our algorithm in this preprint:<br>[Renmin Han†1, Junh
      * [Step 2: Hybrid clustering](#step-2-Hybrid-clustering)
      * [Step 3: Demultiplexing from clustering results](#step-3-Demultiplexing-from-clustering-results)
   * [All datasets](#All-datasets)
-      * [Dataset for test example](#Dataset-for-testexample)
+      * [Dataset for test example](#Dataset-for-test-example)
       * [Datasets used to evaluate our algorithm](#Datasets-used-to-evaluate-our-algorithm)
       * [Labels for datasets used to evaluate demultiplexing performance](#Labels-for-datasets-used-to-evaluate-demultiplexing-performance)
   * [Acknowledgments](#acknowledgments)
