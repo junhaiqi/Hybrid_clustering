@@ -133,7 +133,13 @@ Each dataset, from D1 to D7, consists of a specific number of barcodes: 12, 24, 
 D4-D6 are all subsets of D7, and D4 (D5, D6) is composed of sequences corresponding to the first 200 (250, 300) barcodes in D7. It is important to note that datasets D4-D7 underwent a filtering process to exclude the electrical signals of certain reads. These filtered reads were short in length, and the simulated data generated from them exhibited low quality. To track these low-quality sequences, we documented their indices in a file named "350ErrorReadsIndex.txt." Consequently, datasets D4-D7 do not include the electrical signals from these problematic reads. As an example, in D4, the signal files associated with all reads connected to barcode1 range from timeSeries_1000.txt to timeSeries_1999.txt. However, the signal file timeSeries_1012.txt is not included due to its association with a filtered read.
 
 ### Dataset for test example
-This dataset are available through the following links: https://pan.baidu.com/s/1Cg3nE2rJ4UgzfMSJovW08g?pwd=xh0k 
+This dataset are available through the following links: https://pan.baidu.com/s/1Cg3nE2rJ4UgzfMSJovW08g?pwd=xh0k
+
+Use the following command to create a folder `example` and  `tempoutput`, 
+```bash
+mkdir example && mkdir tempoutput
+```
+and copy the files in the compressed package to `example` for testing.
 
 ### Datasets used to evaluate our algorithm
 Dataset D1 is available through the following links:
