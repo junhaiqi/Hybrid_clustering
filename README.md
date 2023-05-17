@@ -1,94 +1,169 @@
-#==========
-# Abstract:
-#==========
-```
-Title:
-  A hybrid unsupervised approach for accurate short read clustering and barcoded sample demultiplexing in nanopore sequencing
+## Overview
+This project presents an innovative approach to address the demultiplexing problem of [Oxford Nanopore Tecnology](https://nanoporetech.com/) barcodes by implementing a hybrid clustering algorithm. The algorithm utilizes both the Oxford Nanopore signal and the basecalled DNA sequence, resulting in more accurate clustering outcomes.
+
+The algorithm begins by employing a greedy algorithm to cluster the DNA sequences, yielding preliminary results. Subsequently, the initial results are further refined using nanopore signals. This iterative refinement process enhances the accuracy of the clustering, particularly on datasets that contain a substantial number of barcodes.
+
+Moreover, the algorithm incorporates a GPU-based acceleration mechanism, enhancing the overall operational efficiency of the algorithm. This integration of GPU acceleration facilitates faster processing and analysis, leading to improved performance and reduced computational time.
+
+Compared to existing demultiplexing tools such as Guppy, this algorithm demonstrates more stable performance across various datasets, especially those comprising a significant number of barcodes.
+
+You can read more about our algorithm in this preprint:<br>[Renmin Han†1, Junhai Qi†1,2, Yang Xue1
+, Xiujuan Sun3, Fa Zhang3*, Xin Gao4* and Guojun Li1*:
+ A hybrid unsupervised approach for accurate short read clustering and barcoded sample demultiplexing in nanopore sequencing](https://www.biorxiv.org/content/10.1101/2022.04.13.488186v1.full.pdf)
 
 
-Author:
-  Renmin Han+,
-  Junhai Qi+,
-  Yang Xue,
-  Lei M. Li,
-  Xiujuan Sun,
-  Fa Zhang*,
-  Xin Gao*,
-  Guojun*
+## Table of contents
+
+  * [Requirements](#requirements)
+  * [Installation](#installation)
+  * [Using our hybrid clustering algorithm](#using-our-hybrid-clustering-algorithm)
+     * [Step 1: Data preparation for clustering](#step-1-Data-preparation-for-clustering)
+     * [Step 2: Hybrid clustering](#step-2-Hybrid-clustering)
+     * [Step 3: Demultiplexing from clustering results](#step-3-Demultiplexing-from-clustering-results)
+  * [All datasets](#All-datasets)
+      * [Dataset for test example](#Dataset-for-testexample)
+      * [Datasets used to evaluate our algorithm](#Datasets-used-to-evaluate-our-algorithm)
+      * [Labels for datasets used to evaluate demultiplexing performance](#Labels-for-datasets-used-to-evaluate-demultiplexing-performance)
+  * [Acknowledgments](#acknowledgments)
+  * [License](#license)
 
 
-Contact email:
-  gjli@sdu.edu.cn
-  xin.gao@kaust.edu.sa
-  zhangfa@ict.ac.cn
-```
+## Requirements
+Our hybrid clustering algorithm runs Linux and requires CUDA 11.7+, conda 4.9.2+ and gcc 9.4.0+.
 
-#=========
-# Install:
-#=========
-#**********************************************************************************************************************
-The following commands are all run in the linux terminal, the installation commands for Ubuntu are given below, and the 
-installation commands for other linux systems are similar. 
-#**********************************************************************************************************************
 
-# In order to ensure the environment, it is recommended to use the following command:
-```
-wget https://repo.anaconda.com/archive/Anaconda2-2018.12-Linux-x86_64.sh
-bash Anaconda2-2018.12-Linux-x86_64.sh
-./install.sh
+## Installation
 
-```
-# In addition, the following additional packages also need to be installed:
-```
-sudo apt install mafft
-pip install threading
-pip install time
-pip install numpy
-pip install math
-
-CUDA needs to be installed, refer to:
-https://docs.nvidia.com/cuda/cuda-installation-guide-linux/index.html
-
+You can create python virtual environment with conda for run our algorithm:
+```bash
+conda env create -f hybridClustering.yaml
 ```
 
-# 
-
-#---- usage ---#
-```
-usage: python Hybrid_clustering.py *.fasta Signal_folder out.txt
-*.fasta ---FASTA file to be clustered.
-Signal_folder ---Nanopore signal files corresponding to DNA. Naming rules: signal_0.txt,signal_1.txt...
-out.txt ---Result output file.
-
-Note: *.fasta file format: Refer to the given fasta example file(20_45_10000.fasta)
-Signal_folder format: Refer to the given signal folder(20_45_10000signal)
-
+and generate executable programs needed by our algorithm:
+```bash
+bash generateBinaryPrograms.sh
 ```
 
-#=========
-# Example:
-#=========
 
+## Using our hybrid clustering algorithm
+To utilize our tool, users are required to provide the following data:
+   * Raw nanopore signals: These are the original     signals obtained from nanopore sequencing.
+   * DNA sequences after sequencing: The DNA sequences obtained through the sequencing process.
+   * Barcode sequences: The specific sequences corresponding to the barcodes used in the experiment.
+   * Adapter sequence: The adapter sequence used in the sequencing process.
+
+### Step 1: Data preparation for clustering
+
+The user employs the `mainDataPreparation.py` script to extract the barcode data. In this step,
+the user inputs all the aforementioned data, and the output includes pseudo-barcode signals(the barcode signals
+extracted by our method), pseudo-barcode sequences(the barcode sequences extracted by our method), and the
+standard barcode signals corresponding to the barcode sequences.
+
+The specific parameters are as follows:
+   | Parameters   | Description |
+   |  :----:  | :----:  |
+   | --h  | show this help message and exit |
+   | --sigDir  | Indicates a path to a folder containing only nanopore signal files (format: txt). |
+   | --seqFile  | Indicates a fasta file that containing sequenced DNA sequences. |
+   | --barSeqFile  | Indicates a fasta file that containing barcode sequences. |
+   | --sigRootName  | Indicates the prefix name of the signal file. |
+   | --adapSeq  | Indicates a adapter sequence. |
+   | --oADir  | Indicates a folder for storing standard nanopore signal corresponding to the adapter sequence. |
+   | --oBDir  | Indicates a folder for storing extracted barcode signals from nanopore signals. |
+   | --oTBDir  | Indicates a folder for storing strandard barcode signals. |
+   | --oBF   | Indicates a fasta file to record the extracted barcode sequences. |
+   | --bl  | Indicates the sequence length of the barcode (including flanking sequences). |
+   | --spl  | Indicates the length of the prefix sequence. The barcode sequence is in this prefix sequence. |
+
+
+When the dataset for testing is prepared, users can run the following command to test whether this module is deployed successfully:
+```bash
+bash runExample_mainDataPreparation.sh
 ```
-python Hybrid_clustering.py 20_45_10000.fasta 20_45_10000signal test.txt
 
+### Step 2: Hybrid clustering
+
+The user then uses the `mainHybridClustering.py` script for clustering. Here, the user needs to
+provide the pseudo-barcode signals and pseudo-barcode sequences as input. The output is a file containing the
+clustering results.
+
+The specific parameters are as follows:
+   | Parameters   | Description |
+   |  :----:  | :----:  |
+   | --h  | show this help message and exit |
+   | --barSigDir  | Indicates a path to a folder containing only extracted barcode signal files (format: txt). |
+   | --barSeqFile  | Indicates a fasta file that containing extracted barcode sequences. |
+   | --barSeqFile  | Indicates a fasta file that containing barcode sequences. |
+   | --sigRootName  | Indicates the prefix name of the signal file. |
+   | --oclusterFile  | Indicates a file for storing final clustering result. |
+   | --precise  | When the estimated number of clusters is greater than 100, it is recommended to set it to 1, otherwise, set it to 0. |
+
+When the dataset for testing is prepared, users can run the following command to test whether this module algorithm is deployed successfully:
+```bash
+bash runExample_mainHybridClustering.sh
 ```
 
-#===============
-# Output format:
-#===============
+### Step 3: Demultiplexing from clustering results
+
+Finally, the user applies the `mainDemultiplexByClusteringRes.py` script to convert the clus-
+tering results into the final demultiplexing output. This step requires the clustering result file, pseudo-barcode
+signals, and the standard nanopore signals as input. The output is a file containing the demultiplexing result.
+
+The specific parameters are as follows:
+   | Parameters   | Description |
+   |  :----:  | :----:  |
+   | --h  | show this help message and exit |
+   | --barSigDir  | Indicates a path to a folder containing only extracted barcode signal files (format: txt). |
+   | --sigRootName  | Indicates the prefix name of the signal file. |
+   | --sbarSigDir  | Indicates the folder where standard signals are stored. |
+   | --clusterFile  | Indicates the file that storing the clustering result. |
+   | --oDemFile  | Indicates the file for storing final demultiplexing result. |
+
+When the dataset for testing is prepared, users can run the following command to test whether this module algorithm is deployed successfully:
+```bash
+bash mainDemultiplexByClusteringRes.py
 ```
-e.g. test.txt:
 
-1034 1421 1232 1299 1213 1296 1147 1174 1089 1457 1183 1481 1313 1054 1318 1341 1290 1300 1111 1086 1334 1206 1450 1180 1247 1229 1169 1310 1186 1276 1060 1128 1240 1042 1057 1497 1423 1076 1456 1409 1480 1370 1343 1283 1270 1399 1062 1041 1235 1419 1097 1036 1355 1043 1107 1032 1434 1482 1422 1095 1118 1451 1286 1330 1171 1144 1272 1059 1211 1193 1120 1331 1019 1492 1391 1454 1255 1347 1130 1348 1160 1050 1468 1259 1443 1094 1447 1138 1132 1004 1408 1073 1383 1312 1374 1126 1396 1006 1209 1234 1014 1081 1227 1028 1168 1150 1438 1349 1260 1112 1156 1386 1021 1103 1005 1394 1134 1167 1051 1098 1208 1429 1135 1369 1382 1203 1289 1162 1105 1031 1178 1464 1202 1285 1207 1236 1071 1387 1100 1109 1225 1037 1288 1364 1415 1413 1133 1321 1244 1158 1277 1302 1400 1323 1293 1159 1046 1471 1316 1487 1119 1307 1226 1357 1414 1324 1418 1395 1237 1460 1148 1432 1344 1474 1268 1251 1496 1215 1467 1412 1437 1177 1024 1453 1416 1417 1056 1175 1017 1389 1085 1131 1264 1124 1393 1494 1405 1333 1179 1191 1254 1366 1472 1045 1435 1187 1212 1266 1500 1141 1117 1182 1358 1444 1084 1311 1246 1242 1002 1461 1371 1233 1192 1058 1129 1248 1064 1023 1122 1204 1140 1485 1245 1078 1367 1385 1250 1142 1188 1498 1035 1424 1003 1361 1176 1066 1308 1154 1269 1407 1072 1352 1195 1282 1322 1069 1470 1426 1172 1332 1304 1012 1430 1463 1459 1189 1018 1102 1181 1040 1351 1099 1380 1256 1065 1365 1088 1274 1398 1329 1375 1200 1462 1448 1305 1127 1263 1314 1139 1473 1342 1403 1495 1489 1262 1230 1261 1241 1197 1280 1338 1373 1359 1027 1297 1449 1493 1499 1279 1273 1011 1303 1010 1166 1157 1354 1185 1149 1220 1146 1486 1198 1368 
-2454 2283 2247 2468 2196 2204 2309 2157 2342 2233 2320 2324 2042 2280 2060 2263 2116 2170 2380 2159 2248 2207 2024 2023 2311 2329 2078 2397 2442 2031 2282 2131 2004 2328 2251 2153 2339 2244 2209 2192 2164 2304 2147 2312 2289 2154 2351 2252 2079 2368 2138 2334 2264 2235 2214 2240 2292 2175 2185 2183 2165 2340 2040 2415 2364 2481 2169 2307 2020 2011 2103 2137 2187 2120 2438 2033 2223 2139 2085 2201 2107 2322 2115 2459 2111 2383 2258 2473 2299 2424 2112 2193 2163 2321 2088 2265 2197 2190 2408 2217 2030 2422 2260 2474 2068 2439 2028 2390 2270 2098 2250 2404 2226 2445 2425 2305 2071 2173 2151 2127 2229 2355 2176 2236 2191 2145 2495 2371 2389 2396 2483 2242 2015 2046 2488 2262 2021 2171 2118 2479 2394 2174 2114 2249 2457 2388 2429 2199 2412 2288 2443 2218 2267 2108 2123 2373 2160 2104 2105 2287 2092 2189 2387 2200 2077 2452 2026 2417 2216 2052 2336 2230 2318 2393 2348 2136 2451 2285 2272 2276 2177 2496 2161 2237 2436 2414 2346 2433 2036 2456 2001 2401 2271 2032 2050 2419 2075 2426 2279 2168 2449 2437 2333 2277 2325 2461 2363 2205 2362 2420 2385 2158 2179 2372 2423 2411 2022 2361 2119 2027 2367 2427 2432 2475 2441 2208 2180 2135 2326 2482 2044 2081 2407 2450 2178 2343 2486 2405 2035 2494 2150 2295 2478 2058 2149 2464 2070 2195 2087 2490 2409 2212 2418 2232 2434 2076 2353 2121 2268 2113 2357 2125 2440 2366 2130 2499 2072 2358 2211 2317 2162 2406 2453 2398 2002 2037 2416 2465 2238 2470 2447 2091 2038 2273 2029 2316 2257 2034 2124 2254 2008 2386 2352 2220 2051 2069 2430 2062 2142 2086 2166 2122 2391 2319 2492 2428 2359 2377 2301 2156 2294 2084 2269 2477 2381 2009 2143 2469 2497 2421 2090 2281 2379 2155 2007 2400 2064 2054 2102 2234 2446 2489 2039 2480 2045 2356 2275 2448 2018 2106 2241 2017 2172 2093 2073 2053 2345 2126 2293 2463 2099 2059 2245 2082 2399 2101 2278 2148 2327 2097 2219 2255 2224 2109 2330 2184 2096 2181 2300 2132 2472 2403 2089 2182 2291 2378 2256 2296 2186 2435 2083 2206 2041 2213 2146 2487 2410 2080 2215 2056 2243 2152 2323 2360 2354 2491 2167 2384 2094 2228 2484 2313 2066 2117 2431 2349 2221 2306 2331 2198 2128 2467 2049 2010 2065 2074 2110 2133 2134 2140 2141 2222 2246 2259 2284 2286 2297 2298 2302 2303 2310 2314 2332 2335 2338 2341 2365 2370 2374 2395 2444 2462 2466 2476 2485 2493 2500 2003 2006 2012 2013 2016 2047
-......
 
-Here, one line of the file represents a category, and the number appearing in each line corresponds to the corresponding DNA sequence in the fasta file. 
+## All datasets
+We conducted a thorough investigation of the nanopore multi-sample sequencing pipeline and successfully generated simulated datasets labeled D1-D7. These datasets are divided into two categories: D1-D3 carry official nanopore barcodes, while D4-D7 feature randomly generated barcodes.
 
-```
-More data is provided in the following Baidu cloud link：
-link：https://pan.baidu.com/s/10fDERa9uIKYN8lhwCOM_Ug 
-Extraction code：hycl
-Interested users can download and use.
+Each dataset, from D1 to D7, consists of a specific number of barcodes: 12, 24, 96, 200, 250, 300, and 350, respectively. In each dataset, every 1000 sequences are associated with a unique barcode. For example, in D1, barcode0 is linked to the first 1000 reads. To simulate the nanopore sequencing process, we utilized Deepsimulator1.5. This software took each sequence in the dataset as input, generating simulated nanopore signals and corresponding base-called sequences.
 
+D4-D6 are all subsets of D7, and D4 (D5, D6) is composed of sequences corresponding to the first 200 (250, 300) barcodes in D7. It is important to note that datasets D4-D7 underwent a filtering process to exclude the electrical signals of certain reads. These filtered reads were short in length, and the simulated data generated from them exhibited low quality. To track these low-quality sequences, we documented their indices in a file named "350ErrorReadsIndex.txt." Consequently, datasets D4-D7 do not include the electrical signals from these problematic reads. As an example, in D4, the signal files associated with all reads connected to barcode1 range from timeSeries_1000.txt to timeSeries_1999.txt. However, the signal file timeSeries_1012.txt is not included due to its association with a filtered read.
+
+### Dataset for test example
+This dataset are available through the following links: https://pan.baidu.com/s/1Cg3nE2rJ4UgzfMSJovW08g?pwd=xh0k 
+
+### Datasets used to evaluate our algorithm
+Dataset D1 is available through the following links:
+https://pan.baidu.com/s/1xwoDB-sbH_hhXl4oy-dAQQ?pwd=6la7 
+
+Dataset D2 is available through the following links:
+https://pan.baidu.com/s/1v3RCLBWuvILLJvn7JBcfzw?pwd=d7rx 
+
+Dataset D3 is available through the following links:
+https://pan.baidu.com/s/1UnfcRcZZsFNsOXtXNDT3jw?pwd=abhx 
+
+Dataset D4 is available through the following links:
+https://pan.baidu.com/s/1a1s2_4qhmzftBuiGtwZSbg?pwd=jd0o 
+
+Dataset D5 is available through the following links:
+https://pan.baidu.com/s/1mcq4Jw1aYXtkQmRKsS38LQ?pwd=mgs9 
+
+Dataset D6 is available through the following links:
+https://pan.baidu.com/s/1r4hA6tzrCsaU9x2zOfOVCQ?pwd=ppqv 
+
+Dataset D7 is available through the following links: https://pan.baidu.com/s/1xyQKXleCzjR9EEiS0YjUmw?pwd=0dzz 
+
+`Note: The signal files in datasets D4-D6 are obtained through D7 and the corresponding labels. `
+### Labels for datasets used to evaluate demultiplexing performance
+Labels of datasets are available through the following links:
+https://pan.baidu.com/s/1W5yHMKvPxO45WZj58NtmPg?pwd=d4ua 
+
+
+## Acknowledgments
+Thanks to Master Li Zhengyi for constructing label tables of datasets.
+
+## License
+No license.

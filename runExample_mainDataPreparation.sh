@@ -1,0 +1,11 @@
+python mainDataPreparation.py \
+        --sigDir example/ONT12Sigs \
+        --seqFile example/rawSeqsONT12.fasta \
+        --sigRootName timeSeries \
+        --adapSeq AATGTACTTCGTTCAGTTACGTATTGCT \
+        --oADir example/RealbarcodeONT12AdapterSig \
+        --oBDir example/RealAmpBarSigsONT12 \
+        --oTBDir example/trueBarSigsONT12 \
+        --barSeqFile example/strandONT12BarSeqs.fasta \
+        --oBF example/finalBarSeqsWithLabel.fasta \
+        --bl 40 \
