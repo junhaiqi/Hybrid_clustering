@@ -76,7 +76,7 @@ The specific parameters are as follows:
    | --spl  | Indicates the length of the prefix sequence. The barcode sequence is in this prefix sequence. |
 
 
-When the dataset for testing is prepared, users can run the following command to test whether this module is deployed successfully:
+When the dataset for testing is prepared [Dataset for test example](#Dataset-for-test-example), users can run the following command to test whether this module is deployed successfully:
 ```bash
 bash runExample_mainDataPreparation.sh
 ```
@@ -98,7 +98,7 @@ The specific parameters are as follows:
    | --oclusterFile  | Indicates a file for storing final clustering result. |
    | --precise  | When the estimated number of clusters is greater than 100, it is recommended to set it to 1, otherwise, set it to 0. |
 
-When the dataset for testing is prepared, users can run the following command to test whether this module algorithm is deployed successfully:
+When the dataset for testing is prepared [Dataset for test example](#Dataset-for-test-example), users can run the following command to test whether this module algorithm is deployed successfully:
 ```bash
 bash runExample_mainHybridClustering.sh
 ```
@@ -119,7 +119,7 @@ The specific parameters are as follows:
    | --clusterFile  | Indicates the file that storing the clustering result. |
    | --oDemFile  | Indicates the file for storing final demultiplexing result. |
 
-When the dataset for testing is prepared, users can run the following command to test whether this module algorithm is deployed successfully:
+When the dataset for testing is prepared [Dataset for test example](#Dataset-for-test-example), users can run the following command to test whether this module algorithm is deployed successfully:
 ```bash
 bash runExample_mainDemultiplexByClusteringRes.sh
 ```
