@@ -126,7 +126,7 @@ bash runExample_mainDemultiplexByClusteringRes.sh
 
 
 ## All datasets
-We conducted a thorough investigation of the nanopore multi-sample sequencing pipeline and successfully generated simulated datasets labeled D1-D7. These datasets are divided into two categories: D1-D3 carry official nanopore barcodes, while D4-D7 feature randomly generated barcodes.
+We conducted a thorough investigation of the nanopore multi-sample sequencing pipeline(https://github.com/JustLeeee/ONT-sequencing-data-library-preparation-pipeline.git) and successfully generated simulated datasets labeled D1-D7. These datasets are divided into two categories: D1-D3 carry official nanopore barcodes, while D4-D7 feature randomly generated barcodes.
 
 Each dataset, from D1 to D7, consists of a specific number of barcodes: 12, 24, 96, 200, 250, 300, and 350, respectively. In each dataset, every 1000 sequences are associated with a unique barcode. For example, in D1, barcode0 is linked to the first 1000 reads. To simulate the nanopore sequencing process, we utilized Deepsimulator1.5(https://github.com/liyu95/DeepSimulator.git). This software took each sequence in the dataset as input, generating simulated nanopore signals and corresponding base-called sequences.
 
