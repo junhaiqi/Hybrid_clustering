@@ -11,7 +11,7 @@ You can read more about our algorithm in this preprint:<br>[Renmin Han†1, Junh
 , Xiujuan Sun3, Fa Zhang3*, Xin Gao4* and Guojun Li1*:
  A hybrid unsupervised approach for accurate short read clustering and barcoded sample demultiplexing in nanopore sequencing](https://www.biorxiv.org/content/10.1101/2022.04.13.488186v1.full.pdf)
 
-
+For any questions about this project, please contact the developer via the following email: 201911865@mail.sdu.edu.cn.
 ## Table of contents
 
   * [Requirements](#requirements)
