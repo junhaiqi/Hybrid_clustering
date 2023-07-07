@@ -6,8 +6,10 @@ if 'module/generate_nanoTruesig/module/' not in sys.path:
     sys.path.append('module/generate_nanoTruesig/module/')
 from mainHybridClusteringClass import DNASeqAndSig
 from generatNoiselessSignal import sequence_to_true_signal
+from findBarcodeSinalPosition import findBarcodeSinalPosition as FBS
 from multiprocessing import Pool
 import argparse
+from edlib import align
 
 class ClusteringDataPipeline(DNASeqAndSig):
     """A class for preparing data for hybrid clustering."""
@@ -57,6 +59,53 @@ class ClusteringDataPipeline(DNASeqAndSig):
 
         return allSeqList
 
+    def findBarPosByAdpterSeqWithFillter(self, seq):
+        """get the barcode sequence from DNA sequences by adpter sequence."""
+        _align = align
+        adapSeqTopRegionLenth = len(self.adpterSeq)+int(len(self.adpterSeq)*0.2)
+        # print(adapSeqTopRegionLenth)
+        res = _align(self.adpterSeq, seq[0:adapSeqTopRegionLenth], mode="HW", task="locations")  # Find the position of adapter sequence.
+        
+        if res['editDistance'] < len(self.adpterSeq)*0.45:
+            adpterEndPos = res['locations'][-1][-1]  # Get the end position of adpter sequence.
+            barcodeSeq = seq[adpterEndPos:adpterEndPos+int(self.barcodeLen)]  # A heuristic strategy is used to determine the barcode sequence, 
+                                                                            # that is, the sequence after the adapter sequence is found. 
+            return barcodeSeq
+        else:
+            return None
+
+    def mutiFindBarcodeSigWithFillter(self, outAdapterSignalDir='tempoutput/adpterSig', barcodeSigDir = 'tempoutput/barcodeSig', past = 0, succIdxList = []):
+        """get the barcode signals from the read nanopore signals using mutiple threads."""
+        fileNum = len(succIdxList)
+        #barcodeSigDir = 'tempoutput/' + self.SigDirPath.split('/')[-1] + '_barcodeSigs'
+        sigFileList = [self.SigDirPath + '/' + self.sigRootName + '_%d.txt'%item for item in succIdxList]
+        if past == 1:
+            if not os.path.exists(barcodeSigDir):
+                os.makedirs(barcodeSigDir)
+                outAdapterSignalDirList = [outAdapterSignalDir for i in range(fileNum)]
+                outBarcodeSigFileList = [barcodeSigDir + '/' + self.sigRootName + '_%d.txt'%item for item in succIdxList]
+                barcodeLenList = [self.barcodeLen for i in range(fileNum)]
+                args = [(sigFileList[i], outAdapterSignalDirList[i], outBarcodeSigFileList[i], barcodeLenList[i]) for i in range(fileNum)]
+                
+                pool = Pool(self.threadNum)
+                pool.starmap(FBS, args)
+                pool.close()
+                pool.join()
+            else:
+                print('The barcode signals of this path has been extracted in the past! For now ignore fetching!')
+        else:
+            if not os.path.exists(barcodeSigDir):
+                os.makedirs(barcodeSigDir)
+                
+            outAdapterSignalDirList = [outAdapterSignalDir for i in range(fileNum)]
+            outBarcodeSigFileList = [barcodeSigDir + '/' + self.sigRootName + '_%d.txt'%item for item in succIdxList]
+            barcodeLenList = [self.barcodeLen for i in range(fileNum)]
+            args = [(sigFileList[i], outAdapterSignalDirList[i], outBarcodeSigFileList[i], barcodeLenList[i]) for i in range(fileNum)]
+            pool = Pool(self.threadNum)
+            pool.starmap(FBS, args)
+            pool.close()
+            pool.join()
+
     def getBarcodePosInAllSeqList(self, outFile=None, fastqList = [], mode = 'fasta'):
         """Get barcodes from a list that include DNA sequences and write them into 'outFile'."""
         if mode == 'fastqPath':
@@ -79,7 +128,7 @@ class ClusteringDataPipeline(DNASeqAndSig):
             print("There are only three modes A, B and C here! Please enter the correct pattern to extract the barcode sequence!")
             exit(-1)
 
-        _func = self.findBarPosByAdpterSeq
+        _func = self.findBarPosByAdpterSeqWithFillter
         pool = Pool(self.threadNum)
         barcodeList = list(pool.imap(_func, seqList))
         pool.close()
@@ -90,12 +139,15 @@ class ClusteringDataPipeline(DNASeqAndSig):
 
         writeFile = open(outFile, 'w')
         t = 0
+        succIdxList = []
         for seq in barcodeList:
-            writeFile.write('>%d\n'%t)
-            writeFile.write('%s\n'%seq)
+            if seq != None:
+                writeFile.write('>%d\n'%t)
+                writeFile.write('%s\n'%seq)
+                succIdxList.append(t)
             t += 1
         writeFile.close()
-        return barcodeList
+        return barcodeList, succIdxList
 
     def getBarSeqFromBarFasta(self):
         seqAndIdxList = []
@@ -117,10 +169,11 @@ class ClusteringDataPipeline(DNASeqAndSig):
             sequence_to_true_signal(seqAndIdxList[i], output_folder = outSigDir, sigroot=self.sigRootName)
 
     def getBarcodeSigFiles(self, adapterSigsDir = 'tempoutput/barcodeONT12AdapterSig',
-                            outBarcodeDir = '12BarSigs'):
+                            outBarcodeDir = '12BarSigs', succIdxList = []):
 
         self.getAdpterSig(output_folder = adapterSigsDir)
-        self.mutiFindBarcodeSig(outAdapterSignalDir=adapterSigsDir, barcodeSigDir = outBarcodeDir, past=0)
+        self.mutiFindBarcodeSigWithFillter(outAdapterSignalDir=adapterSigsDir, barcodeSigDir = outBarcodeDir, \
+                                            past=0, succIdxList = succIdxList)
 
 
 def initializationParameters():
@@ -163,8 +216,9 @@ def main():
                                 seqPrefixLen = args.spl, \
                                 adpterSeq = args.adapSeq)
 
-    mainPipeLine.getBarcodePosInAllSeqList(outFile=args.oBF)  # Get all extracted barcode sequences.
-    mainPipeLine.getBarcodeSigFiles(adapterSigsDir = args.oADir, outBarcodeDir = args.oBDir)  # Get all extracted barcode signals.
+    # mainPipeLine.findBarPosByAdpterSeqWithFillter(seq = '')
+    succIdxList = mainPipeLine.getBarcodePosInAllSeqList(outFile=args.oBF)[1]  # Get all extracted barcode sequences.
+    mainPipeLine.getBarcodeSigFiles(adapterSigsDir = args.oADir, outBarcodeDir = args.oBDir, succIdxList = succIdxList)  # Get all extracted barcode signals.
     mainPipeLine.getStandradBarSigs(outSigDir = args.oTBDir)  # Get all strandard barcode signals from barcode fasta file.
 
 if __name__ == "__main__":

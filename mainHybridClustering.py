@@ -5,7 +5,7 @@ import argparse
 if 'module' not in sys.path:
     sys.path.append('module')
 
-from mainHybridClusteringClass import DNASeqAndSig
+from mainHybridClusteringClassRefine import DNASeqAndSig
 
 def initializationParameters():
     parser = argparse.ArgumentParser()
@@ -30,9 +30,13 @@ def main():
                             sigRootName = args.sigRootName)
     
     if args.precise == 1:
-        thresFactorBG = 4.3
-        thresFactorRefine = 3.3
-        thresFactorGM = 3.3
+        # thresFactorBG = 4.3
+        # thresFactorRefine = 4
+        # thresFactorGM = 4
+        thresFactorBG = 4.7
+        thresFactorRefine = 4
+        thresFactorGM = 4
+        
     else:
         thresFactorBG = 3
         thresFactorRefine = 3

@@ -1,0 +1,434 @@
+from subprocess import *
+import os
+from edlib import align
+from multiprocessing import Pool
+from warnings import filterwarnings
+import sys
+from time import time
+
+if 'module' not in sys.path:
+    sys.path.append('module')
+import numpy as np
+filterwarnings("ignore", category=Warning)
+
+if 'module' not in sys.path:
+    sys.path.append('module')
+
+if 'module/generate_nanoTruesig/' not in sys.path:
+    sys.path.append('module/generate_nanoTruesig/')
+
+if 'module/queryLocalSignal/module' not in sys.path:
+    sys.path.append('module/queryLocalSignal/module')
+
+if 'module/queryLocalSignal/' not in sys.path:
+    sys.path.append('module/queryLocalSignal/')
+
+if 'module/generate_nanoTruesig/module/' not in sys.path:
+    sys.path.append('module/generate_nanoTruesig/module/')
+
+if 'module/generate_nanoTruesig/model_data/' not in sys.path:
+    sys.path.append('module/generate_nanoTruesig/model_data/')
+
+from findLocalSignalPosition import fromLongRefFindShortQuery
+from generatNoiselessSignal import sequence_to_true_signal
+from findBarcodeSinalPosition import findBarcodeSinalPosition as FBS
+
+
+
+class DNASeqAndSig:
+    """A class for descript DNA sequences and nanopore signals."""
+    def __init__(self, DNAFilePath, SigDirPath, finalClusteringFile, sequencedFilePath = '', \
+                adpterSeq = 'GGCGTCTGCTTGGGTGTTTAACCTTTTTTTTTTAATGTACTTCGTTCAGTTACGTATTGCT', \
+                sigRootName = 'timeSeries', \
+                barcodeLen = 40,  
+                threadNum = 8, \
+                barcodeNoflankingLen = 24):
+
+        self.DNAFilePath = DNAFilePath  # A path of fasta file that include DNA sequences. Format is: >0 AAA >1 CCC...
+        self.SigDirPath = SigDirPath  # A path of folder that include nanopore signals.
+        self.sequencedFilePath = sequencedFilePath  # A path of fasta file that include DNA sequences. Format is complex.
+        self.adpterSeq = adpterSeq  # Adpter sequence for fixed barcode sequence.
+        self.barcodeLen = barcodeLen  # Barcode length. Affects the length of the extracted barcode sequences(A,T,C,G).
+        self.threadNum = threadNum  # The number of thread.
+        self.sigRootName = sigRootName  # The prefix name of the nanopore signal file in "SigDirPath".
+        self.finalClusteringFile = finalClusteringFile  # The final clusting file.
+        self.barcodeNoflankingLen = barcodeNoflankingLen  # Affects the length of the extracted barcode signal.
+
+    def localAlignTwoDNASeq(self, seq1, seq2):
+        """performs a local alignment of two DNA sequences."""
+        _align = align
+        out = _align(seq1, seq2, mode="HW", task="locations")    
+        return out  
+
+    def findBarPosByAdpterSeq(self, seq):
+        """get the barcode sequence from DNA sequences by adpter sequence."""
+        _align = align
+        adapSeqTopRegionLenth = len(self.adpterSeq)+int(len(self.adpterSeq)*0.2)
+        # print(adapSeqTopRegionLenth)
+        res = _align(self.adpterSeq, seq[0:adapSeqTopRegionLenth], mode="HW", task="locations")  # Find the position of adapter sequence.
+        adpterEndPos = res['locations'][-1][-1]  # Get the end position of adpter sequence.
+        barcodeSeq = seq[adpterEndPos:adpterEndPos+int(self.barcodeLen)]  # A heuristic strategy is used to determine the barcode sequence, 
+                                                                          # that is, the sequence after the adapter sequence is found. 
+        return barcodeSeq
+
+    def getAllReadsIndexByFasta(self):
+        indexList = []
+        with open(self.DNAFilePath) as fr:
+            lines = fr.readlines()
+            for line in lines:
+                if line[0] == '>':
+                    readNum  = int(line.strip('\n').split('>')[-1])
+                    indexList.append(readNum)
+        return indexList
+
+    def processSequencedFile(self, splitPrefixLen = 200):
+        """get the prefix of sequenced DNA sequences in 'processSequencedFile'. Barcode in this prefix sequence."""
+        file = self.sequencedFilePath  # A fastq file that include some sequences.
+        DNAList = ['A', 'C', 'T', 'G']  # DNA character.
+        seqList = []  # A list to load DNA sequences.
+        _append = seqList.append
+        with open(file) as f:
+            lines = f.readlines()
+            for line in lines:
+                if line[0] in DNAList:
+                    _append(line.strip('\n')[0:splitPrefixLen])
+        return seqList
+
+    def getBarcodePosInSeqList(self):
+        """get barcodes from a list that include DNA sequences."""
+        seqList = self.processSequencedFile()  # Sequence list.
+        _func = self.findBarPosByAdpterSeq
+        pool = Pool(self.threadNum)
+        barcodeList = list(pool.imap(_func, seqList))
+        pool.close()
+        pool.join()
+        return barcodeList
+
+    def processClusterFile(self, clusterFile):
+        """get the cluster results with LIST format."""
+        clusterList = []
+        with open(clusterFile) as f:  # ClusterFile is the result file that generated by "CDHIT".
+            lines = f.readlines()
+            for i in range(0, len(lines)):
+                if lines[i].startswith('>Cluster'):
+                    if i != 0:
+                        clusterList.append(singleClusterList)
+                    singleClusterList = []  # Create a new cluster.
+                else:
+                    seqIndex = int(lines[i].split('>')[-1].split('.')[0])  # Sequence index, e.g., 1,2,3.
+                    singleClusterList.append(seqIndex)
+        clusterList.append(singleClusterList)  # Append the final cluster.
+        return clusterList
+
+    def clusteringByCDHIT(self, outFile, threshold=0.9):
+        """Clustering by CDHIT algorithm."""
+        command = './bin/mainInitialClustering -i %s -o %s -c %.2f -sc 1 -T 0 -M 0 >/dev/null' \
+                %(self.DNAFilePath, outFile, threshold)
+        runCode = call(command, shell=True)
+        if runCode != 0:  # This case implies that the initial clustering failed. 
+            raise Exception('Initial clustering failed! Please check the input file!')
+
+        outClusterFile = outFile + '.clstr'
+        clusterList = self.processClusterFile(outClusterFile)  # Get the result with LIST format.
+        return clusterList
+
+    def countClusterReads(self, clusterList):
+        """A simple function that get the number of reads for the clustering result."""
+        _sum = 0
+        for cluster in clusterList:
+            _sum += len(cluster)
+        return _sum
+
+    def mergeGoodCluster(self, clusterFile, barcodeSigDir, outFile, sampNum=10, thresFactor = 3.8):
+        """Merging good(or bad) clusters. """
+        mergeCommand = './bin/mainMergeCluster %s %s %s %d %s %f' \
+                        %(clusterFile, barcodeSigDir, self.sigRootName, sampNum, outFile, thresFactor)
+        runcode = call(mergeCommand,
+        stdout=PIPE,
+        stderr=STDOUT,
+        shell=True
+        )
+        if runcode != 0:  # This case implies that the merging failed. 
+            raise Exception('Merging clusters failed! Please check the input file!')
+        
+    def writeClusterIntoFile(self, clusterList, outFile, goodSize = 10, mode='good'):
+        """Writing the cluster results into a file."""
+        if mode == "good":  # Standard format.
+            goodFile = open(outFile, 'w')
+            for cluster in clusterList:
+                for item in cluster:
+                    goodFile.write('%d '%item)
+                goodFile.write('\n')
+            goodFile.close()
+
+        elif mode == "group":  # The first row implies good clustering, the second row implies bad clustering.
+            t = 0
+            _file = open(outFile, 'w')
+            for cluster in clusterList:
+                if t == 0 and len(cluster) < goodSize:  # This case implies good clusters.
+                    _file.write('\n')
+                    _file.write('%d '%cluster[0])  # Only the first element of each cluster is written.
+                    t = 1
+                else:  # This case implies bad clusters.
+                    _file.write('%d '%cluster[0])
+            _file.close()
+
+    def readClusterFile(self, clusterFile):
+        """Get the clustering results from a Standard cluster file."""
+        resList = []
+        file = open(clusterFile)
+        for line in file:  # One line implies one cluster.
+            cluster = [int(item) for item in line.strip('\n').split(' ') if item != '']  # All sequence indexes in the same cluster.
+            resList.append(cluster)
+        file.close()
+        return resList
+
+    def getIndexListByClusterList(self, clusterList):
+        indexList = []
+        for cluster in clusterList:
+            indexList += cluster
+        return indexList
+
+    def writeRefineGroupFile(self, mSizeCluster, oneEleCluster, outFile):
+        """Get the cluster file for refine."""
+        # The first row implies good clustering, the second row implies bad clustering.
+        _file = open(outFile, 'w')
+        for cluster in mSizeCluster:
+            _file.write('%d '%cluster[0])  # Good clustering.
+        _file.write('\n')
+        for cluster in oneEleCluster:
+            _file.write('%d '%cluster[0])  # Bad clustering.
+        _file.close()
+        
+    def mainHybridClustering(self, thresFactorBG = 2.85, thresFactorRefine = 3, thresFactorGM = 4):
+        """ Divide clusters into two groups based on their size, 
+            one group being good clusters and the other group being "bad" clusters. We 
+            try to merge bad clusters into good clusters though a binary program.
+        """
+        start_time = time()
+        ####################################### initial clustering #######################################
+        DNAFileName = self.DNAFilePath.split('/')[-1].split('.')[0]  # The name of DNA file.
+        initClsFilePath = 'tempoutput/' + DNAFileName + '_init.txt'
+        self.clusteringByCDHIT(initClsFilePath)
+        clusterList = self.processClusterFile('%s.clstr'%initClsFilePath)
+        # initIndexList = self.getIndexListByClusterList(clusterList)
+
+        # trueIndexList = self.getAllReadsIndexByFasta()
+        # forgottenIndexSet = set(trueIndexList).difference(initIndexList)
+
+        # for item in forgottenIndexSet:
+        #     clusterList.append([item])
+        ####################################### initial clustering #######################################
+        
+        ####################################### start merge #######################################
+        goodSize = len(clusterList[int(len(clusterList)*0.01)])  # 1/100.
+        barcodeSigDir = self.SigDirPath  # The barcode signal folder path.
+        
+        badClusterList = [item for item in clusterList if len(item) < goodSize]  # Bad clusters.
+        goodClusterList = [item for item in clusterList if len(item) > goodSize-1]  # Good clusters.
+
+        outGoodClusterName = 'tempoutput/' + DNAFileName + '_goodIndex.txt'  # The indexes of good clusters.
+        self.writeClusterIntoFile(goodClusterList, outGoodClusterName, goodSize = goodSize, mode='good')  # Write cluster list into file.
+        mergedResFile = 'tempoutput/' + DNAFileName + '_goodMergeIndex.txt'  # A file that load the merge results.
+        self.mergeGoodCluster(outGoodClusterName, barcodeSigDir, outFile = mergedResFile, sampNum=10, thresFactor = thresFactorGM)  # Write cluster list into file.
+        goodClusterList = self.readClusterFile(mergedResFile)  # Update good cluster.
+        
+        clusterList = goodClusterList + badClusterList  # Update clusterList.
+        outGroupFileName = 'tempoutput/' + DNAFileName + '_goupedIndex.txt'  # Good cluster index(top element), bad cluster indexes.
+        self.writeClusterIntoFile(clusterList, outGroupFileName, goodSize = goodSize, mode='group')
+        
+        oldGoodLen = len(goodClusterList)
+    
+        newMergeCommand = './bin/mainBad2Good %s %s %s %f'%(outGroupFileName, barcodeSigDir, self.sigRootName, thresFactorBG)
+        p = Popen(newMergeCommand,
+        stdout=PIPE,
+        stderr=STDOUT,
+        shell=True
+        )  # Try to merge bad clusters into good clusters.
+
+        newMergeResOut = p.communicate()[0].decode('gb2312')
+        mergeInfoList = [int(item) for item in newMergeResOut.split('\n')[2:] if item != '']
+
+        mergeInfoFile = open('tempoutput/' + DNAFileName + '_bad2GoodIndex.txt', 'w')
+        for item in mergeInfoList:
+            mergeInfoFile.write('%d\n'%item)
+        mergeInfoFile.close()
+
+        for i in range(len(mergeInfoList)):
+            if mergeInfoList[i] < oldGoodLen:
+                goodClusterList[mergeInfoList[i]] += badClusterList[i]  # Some bad clusters are merged into good clusters.
+
+        for i in range(len(mergeInfoList)):
+            if mergeInfoList[i] > oldGoodLen:
+                goodClusterList.append(badClusterList[i])  # Some bad clusters are not merged into good clusters.
+
+        self.writeClusterIntoFile(goodClusterList, self.finalClusteringFile, goodSize = 10, mode='good')
+        ###################################### end merge #######################################
+        
+        ###################################### start Refine #######################################
+        for i in range(5):  # Try to refine bad clusters, that is, bad clusters merge into bad clusters.
+            goodClusterList = self.readClusterFile(self.finalClusteringFile)
+            mergeIndex = 10-2*i
+            refinedClusters, refineNum = self.refineClusteringRes(goodClusterList, oldGoodLen, barcodeSigDir, DNAFileName, mergeIndex, thresFactorBG)
+            if refinedClusters == 0 or refineNum == 0:
+                break
+            higClusters = [item for item in goodClusterList[0:oldGoodLen]]
+            finalClusters = higClusters + refinedClusters
+            self.writeClusterIntoFile(finalClusters, self.finalClusteringFile, goodSize = 10, mode='good')
+            oldGoodLen += refineNum
+
+        finalClusters = self.readClusterFile(self.finalClusteringFile)
+        oneClusters = [item for item in finalClusters if len(item) == 1]  # Find clusers with size=1.
+
+        if len(oneClusters) == 0:
+            return finalClusters  # No need to optimize.
+
+        raminClusters = [item for item in finalClusters if len(item) > 1]
+        oneClustersFile = 'tempoutput/' + DNAFileName + '_finalOneClusters.txt'
+        self.writeClusterIntoFile(oneClusters, oneClustersFile, goodSize = 10, mode='good')
+        outOneClusterRes = 'tempoutput/' + DNAFileName + '_finalOneClustersRefined.txt'
+        self.refineOneCluster(oneClustersFile, barcodeSigDir, outOneClusterRes, thresFactorRefine)  # Clustering for these signals.
+        oneRefineRes = self.readClusterFile(outOneClusterRes)
+        finalClusters = raminClusters + oneRefineRes
+        self.writeClusterIntoFile(finalClusters, self.finalClusteringFile, goodSize = 10, mode='good')
+        end_time = time()
+        print('refine:', end_time - start_time)
+        return finalClusters
+        ###################################### end Refine #######################################
+        
+
+    def refineOneCluster(self, oneClusterFile, barcodeSigDir, outFile, thresFactor=3):
+        """A query algorithm is used to cluster the signals."""
+        newRefineCommand = './bin/mainRefinOneCluster %s %s %s %s %f'%(oneClusterFile, barcodeSigDir, self.sigRootName, outFile, thresFactor)
+        runcode = call(newRefineCommand,
+        stdout=PIPE,
+        stderr=STDOUT,
+        shell=True
+        )
+
+        if runcode != 0:
+            raise Exception('Refining clusters failed! Please check the input file!')
+
+        return runcode
+
+    def refineClusteringRes(self, goodClusterList, oldGoodLen, barcodeSigDir, DNAFileName, mergeIndex, thresFactor):
+        """Refinement, try merge cluster with one element into "medium size" clusters."""
+
+        mSizeCluster = [item for item in goodClusterList[oldGoodLen:] if len(item) > mergeIndex]
+        oneEleCluster = [item for item in goodClusterList[oldGoodLen:] if len(item) < mergeIndex+1]
+        if len(mSizeCluster) == 0 or len(oneEleCluster) == 0:
+            return 0, 0
+
+        oldmSizeClusterLen = len(mSizeCluster)
+        outGroupFileName = 'tempoutput/' + DNAFileName + '_RefinegoupedIndex.txt'
+        self.writeRefineGroupFile(mSizeCluster, oneEleCluster, outGroupFileName)
+
+        newRefineCommand = './bin/mainBad2Good %s %s %s %f'%(outGroupFileName, barcodeSigDir, self.sigRootName, thresFactor)
+        p = Popen(newRefineCommand,
+        stdout=PIPE,
+        stderr=STDOUT,
+        shell=True
+        )
+        newRefineResOut = p.communicate()[0].decode('gb2312')
+        RefineInfoList = [int(item) for item in newRefineResOut.split('\n')[2:] if item != '']
+
+        RefineInfoFile = open('tempoutput/' + DNAFileName + '_RefineIntoIndex.txt', 'w')
+        for item in RefineInfoList:
+            RefineInfoFile.write('%d\n'%item)
+        RefineInfoFile.close()
+
+        for i in range(len(RefineInfoList)):
+            if RefineInfoList[i] < oldmSizeClusterLen:
+                mSizeCluster[RefineInfoList[i]] += oneEleCluster[i]
+
+        for i in range(len(RefineInfoList)):
+            if RefineInfoList[i] > oldmSizeClusterLen:
+                mSizeCluster.append(oneEleCluster[i])
+
+        return mSizeCluster, oldmSizeClusterLen
+
+    def getAdpterSig(self, output_folder = 'tempoutput/adpterSig'):
+        """get the true signal of adpter sequence. Path=output_folder + / + 'timeSeries_0.txt' """
+        if not os.path.exists(output_folder):
+            os.makedirs(output_folder)
+        sequence_to_true_signal((self.adpterSeq, 0), output_folder=output_folder, sigroot=self.sigRootName)
+
+    def get_signal_file(self, filetxt_path):
+        """get the signal values from a txt file."""
+        signal_list = list()
+        with open(filetxt_path, 'r') as f:
+            signal_file = f.readlines()
+            for line in signal_file:
+                signal_Value = float(line.rstrip())
+                signal_list.append(signal_Value)
+        signal = np.array(signal_list)
+        return signal
+
+    def findBarcodeSinalPosition(self, signalFile='signal.txt', outAdapterSignalDir='tempoutput/adpterSig', \
+                                 outBarcodeSigFile='testBarcode.txt'):
+        """get the barcode signal from the read nanopore signal."""
+        # BarcodeLength = self.barcodeNoflankingLen
+        # estimateBarcodeLength = BarcodeLength * 10 + 70 # a super parameter.
+        estimateBarcodeLength = self.barcodeLen * 8 # a super parameter.
+        refSignal = self.get_signal_file(filetxt_path = signalFile)[0:1800]
+        querySignalAdapterPath = outAdapterSignalDir + '/' + 'timeSeries_0.txt'
+        
+        querySignalAdapter = self.get_signal_file(filetxt_path = querySignalAdapterPath)
+        position_start = fromLongRefFindShortQuery(refSignal, querySignalAdapter)[1]
+        barcodeSig = refSignal[position_start + 40: position_start + 40 + estimateBarcodeLength]
+        with open(outBarcodeSigFile, 'w') as f:
+            for item in barcodeSig:
+                f.write('%s\n'%str(item))
+        return barcodeSig
+
+    def mutiFindBarcodeSig(self, outAdapterSignalDir='tempoutput/adpterSig', barcodeSigDir = 'tempoutput/barcodeSig', past=1):
+        """get the barcode signals from the read nanopore signals using mutiple threads."""
+        fileNum = len(os.listdir(self.SigDirPath))
+        #barcodeSigDir = 'tempoutput/' + self.SigDirPath.split('/')[-1] + '_barcodeSigs'
+        sigFileList = [self.SigDirPath + '/' + self.sigRootName + '_%d.txt'%i for i in range(fileNum)]
+        if past == 1:
+            if not os.path.exists(barcodeSigDir):
+                os.makedirs(barcodeSigDir)
+                outAdapterSignalDirList = [outAdapterSignalDir for i in range(fileNum)]
+                outBarcodeSigFileList = [barcodeSigDir + '/' + self.sigRootName + '_%d.txt'%i for i in range(fileNum)]
+                barcodeLenList = [self.barcodeLen for i in range(fileNum)]
+                args = [(sigFileList[i], outAdapterSignalDirList[i], outBarcodeSigFileList[i], barcodeLenList[i]) for i in range(fileNum)]
+                
+                pool = Pool(self.threadNum)
+                pool.starmap(FBS, args)
+                pool.close()
+                pool.join()
+            else:
+                print('The barcode signals of this path has been extracted in the past! For now ignore fetching!')
+        else:
+            if not os.path.exists(barcodeSigDir):
+                os.makedirs(barcodeSigDir)
+                
+            outAdapterSignalDirList = [outAdapterSignalDir for i in range(fileNum)]
+            outBarcodeSigFileList = [barcodeSigDir + '/' + self.sigRootName + '_%d.txt'%i for i in range(fileNum)]
+            barcodeLenList = [self.barcodeLen for i in range(fileNum)]
+            args = [(sigFileList[i], outAdapterSignalDirList[i], outBarcodeSigFileList[i], barcodeLenList[i]) for i in range(fileNum)]
+            pool = Pool(self.threadNum)
+            pool.starmap(FBS, args)
+            pool.close()
+            pool.join()
+
+    def clusterRes2DemultiplexRes(self, clusterFile, barcodeSigDirPath, trueBarcodeSigDirPath, outFile, barcodeNum, mode='voting'):
+        """get the demultiplexing results based on clustering result."""
+        
+        if mode == "voting":  # randomly select signals, voting to get results.
+            command = "./bin/mainCluster2DemRes %s %s %s %s %s %d" \
+                    %(clusterFile, barcodeSigDirPath, self.sigRootName, trueBarcodeSigDirPath, outFile, barcodeNum)
+
+            runcode = call(command,
+            stdout=PIPE,
+            stderr=STDOUT,
+            shell=True
+            )
+            if runcode != 0:
+                raise Exception('Refining clusters failed! Please check the input file!')
+            demultiplexResList = [int(item.strip('\n')) for item in open(outFile) if item.strip('\n') != '']
+            return demultiplexResList
+
+if __name__ == "__main__":
+    pass
