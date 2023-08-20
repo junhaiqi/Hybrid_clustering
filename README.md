@@ -1,5 +1,5 @@
 ![Workflow of our demultiplexing algorithm](module/workflow.jpg)
-## Overview
+## Overview of HycDemux
 This project presents an innovative approach to address the demultiplexing problem of [Oxford Nanopore Tecnology](https://nanoporetech.com/) barcodes by implementing a hybrid clustering algorithm. The algorithm utilizes both the Oxford Nanopore signal and the basecalled DNA sequence, resulting in more accurate demultiplexing outcomes.
 
 The algorithm begins by employing a greedy algorithm to cluster the DNA sequences, yielding preliminary results. Subsequently, the initial results are further refined using nanopore signals. This iterative refinement process enhances the accuracy of the clustering, particularly on datasets that contain a substantial number of barcodes. Based on a voting mechanism, the clustering results are transformed into demultiplexed results.
