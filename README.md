@@ -8,10 +8,6 @@ Moreover, the algorithm incorporates a GPU-based acceleration mechanism, enhanci
 
 Compared to existing demultiplexing tools such as Guppy, this algorithm demonstrates more stable performance across various datasets, especially those comprising a significant number of barcodes.
 
-You can read more about our algorithm in this preprint:<br>[Renmin Han†1, Junhai Qi†1,2, Yang Xue1
-, Xiujuan Sun3, Fa Zhang3*, Xin Gao4* and Guojun Li1*:
- A hybrid unsupervised approach for accurate short read clustering and barcoded sample demultiplexing in nanopore sequencing](https://www.biorxiv.org/content/10.1101/2022.04.13.488186v1.full.pdf)
-
 For any questions about this project, please contact the developer via the following email: 201911865@mail.sdu.edu.cn.
 ## Table of contents
 
@@ -27,6 +23,7 @@ For any questions about this project, please contact the developer via the follo
       * [Labels for datasets used to evaluate demultiplexing performance](#Labels-for-datasets-used-to-evaluate-demultiplexing-performance)
   * [Acknowledgments](#acknowledgments)
   * [License](#license)
+  * [Cite](#cite)
 
 
 ## Requirements
@@ -187,3 +184,6 @@ Thanks to Master Li Zhengyi for constructing label tables of datasets.
 
 ## License 
 GNU General Public License v3.0.
+
+## Cite
+Han, R., Qi, J., Xue, Y. et al. HycDemux: a hybrid unsupervised approach for accurate barcoded sample demultiplexing in nanopore sequencing. Genome Biol 24, 222 (2023). https://doi.org/10.1186/s13059-023-03053-1.
