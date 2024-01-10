@@ -17,7 +17,13 @@ def clusterRes2DemultiplexRes(clusterFile, barcodeSigDirPath, trueBarcodeSigDirP
         )
         if runcode != 0:
             raise Exception('Refining clusters failed! Please check the input file!')
-        demultiplexResList = [int(item.strip('\n')) for item in open(outFile) if item.strip('\n') != '']
+        demultiplexResList = []
+        with open(outFile) as f:
+            lines = f.readlines()
+            for line in lines[1:]:
+                info = line.strip('\n').split(' ')
+                demIdx = int(info[-1])
+                demultiplexResList.append(demIdx)
         return demultiplexResList
 
 def initializationParameters():
