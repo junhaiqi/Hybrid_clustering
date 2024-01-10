@@ -13,6 +13,7 @@
 #include <omp.h>
 #include <vector>
 #include <set>
+#include <map>
 #define DBL_MAX 1.7976931348623158e+308 // max value
 #define PI 3.1415926535898
 #define MAX_NUM 2147483647
