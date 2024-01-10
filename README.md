@@ -137,7 +137,7 @@ All datasets were augmented with an additional 1000 sequences that either lacked
 `Note: The signal folders in D1-D7 and DB4-DB7 do not contain the nanopore signals corresponding to these negative sample sequences, we give them separately. In addition, these negative sample sequences are not included in the sequence files in D1-D7, and we also give them separately. The signal data contained in DB4-DB7 is the same as D4-D7. `
 
 ### Dataset for test example
-This dataset are available through the following links: https://pan.baidu.com/s/1Cg3nE2rJ4UgzfMSJovW08g?pwd=xh0k
+This dataset are available through the following links: https://zenodo.org/records/10477413 or https://pan.baidu.com/s/1Cg3nE2rJ4UgzfMSJovW08g?pwd=xh0k
 
 Use the following command to create a folder `example` and  `tempoutput`, 
 ```bash
